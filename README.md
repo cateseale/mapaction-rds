@@ -37,3 +37,5 @@ sudan
     |   |   ...
     
 ```
+
+Works on MacOS, untested on Windows and Linux
