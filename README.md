@@ -4,7 +4,7 @@ This repository hold various scripts created to process data or assist with the 
 
 ## geofabrik_to_mapaction.py
 
-This script unzips and renames Geofabrik downloads to Mapaction filenames and folder structure.
+This script unzips and renames Geofabrik downloads to Mapaction filenames and folder structure. Adapted from original Windows scirpt by Tom Hughes.
 
 Download data from: https://download.geofabrik.de/index.html
 
