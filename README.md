@@ -4,13 +4,13 @@ This repository hold various scripts created to process data or assist with the 
 
 ## geofabrik_to_mapaction.py
 
-This script unzips and renames Geofabrik downloads to Mapaction filenames and folder structure. Adapted from original Windows scirpt by Tom Hughes.
+This script unzips and renames Geofabrik downloads to Mapaction filenames and folder structure. Adapted from original Windows script by Tom Hughes.
 
 Download data from: https://download.geofabrik.de/index.html
 
 Usage: ``python3 geofabrik_to_mapaction.py path/to/your/zipfile.zip``
 
-For examples, ``python3 geofabrik_to_mapaction.py /Users/cate/git/data/country_data/sudan/sudan-latest-free.zip`` results in folder structure:
+For example, ``python3 geofabrik_to_mapaction.py /Users/cate/git/data/country_data/sudan/sudan-latest-free.zip`` results in folder structure containing renamed shapefiles as below:
 
 ```
 sudan
