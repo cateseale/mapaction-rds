@@ -1,21 +1,11 @@
-#--------------
-
-# Unzips and renames Geofabrik downloads to Mapaction filenames and folder structure.
-
-# Adapted from original by Tom H (thughes@mapaction.org)
-# Errors may be due to the entries in the countries dictionary being incorrect
-
-#--------------
-
-
 import os
 import shutil
 import zipfile
 from pathlib import Path
-from glob import glob
 import ntpath
 import argparse
-
+import warnings
+import re
 
 # Dictionary of country names and abbreviations
 countries = {'afghanistan': 'afg',
@@ -41,7 +31,6 @@ countries = {'afghanistan': 'afg',
              'chile': 'chl',
              'china': 'chn',
              'cote-d-ivoire': 'civ',
-             'ivory': 'civ',
              'cameroon': 'cmr',
              'democratic-republic-of-the-congo': 'cod',
              'congo': 'cog',
@@ -61,6 +50,9 @@ countries = {'afghanistan': 'afg',
              'eritrea': 'eri',
              'ethiopia': 'eth',
              'fiji': 'fji',
+             'ivory': 'civ',
+             'ivory-coast': 'civ',
+             'isle-of-man': 'imn',
              'micronesia-(federated-states-of)': 'fsm',
              'gabon': 'gab',
              'georgia': 'geo',
@@ -78,6 +70,7 @@ countries = {'afghanistan': 'afg',
              'indonesia': 'idn',
              'india': 'ind',
              'iran-(islamic-republic-of)': 'irn',
+             'iran': 'irn',
              'iraq': 'irq',
              'israel': 'isr',
              'jamaica': 'jam',
@@ -91,6 +84,7 @@ countries = {'afghanistan': 'afg',
              'republic-of-korea': 'kor',
              'kuwait': 'kwt',
              'lao-peoples-democratic-republic': 'lao',
+             'laos': 'lao',
              'lebanon': 'lbn',
              'liberia': 'lbr',
              'libya': 'lby',
@@ -176,30 +170,83 @@ countries = {'afghanistan': 'afg',
 
 
 def unzip(src_zip_file, dst_folder):
+    """
+    Unzips a zip file to the given location.
+
+    Inputs:
+        - src_zip_file (zip): Path to a zip file
+        - dst_folder (str): Path to the destination folder
+    Returns:
+        - None
+    """
     with zipfile.ZipFile(src_zip_file, 'r') as src:
         src.extractall(dst_folder)
 
 
 def create_folder_structure(output_folder):
-    # Declare folders
-    stlefolder = os.path.join(output_folder, "229_stle")
-    if not os.path.exists(stlefolder):
-        os.makedirs(stlefolder)
-    tranfolder = os.path.join(output_folder, "232_tran")
-    if not os.path.exists(tranfolder):
-        os.makedirs(tranfolder)
-    physfolder = os.path.join(output_folder, "221_phys")
-    if not os.path.exists(physfolder):
-        os.makedirs(physfolder)
-    poisfolder = os.path.join(output_folder, "222_pois")
-    if not os.path.exists(poisfolder):
-        os.makedirs(poisfolder)
-    bldgfolder = os.path.join(output_folder, "206_bldg")
-    if not os.path.exists(bldgfolder):
-        os.makedirs(bldgfolder)
-    landfolder = os.path.join(output_folder, "218_land")
-    if not os.path.exists(landfolder):
-        os.makedirs(landfolder)
+    """
+    Create subfolders within a given output folder, using the MapAction naming conventions.
+
+    Inputs:
+        - output_folder (str): Path to the desired output folder
+
+    Returns:
+        - None
+    """
+    ma_folder_list = ["229_stle", "232_tran", "221_phys", "222_pois", "206_bldg", "218_land"]
+
+    for ma_folder in ma_folder_list:
+        dst_path = os.path.join(output_folder, ma_folder)
+        if not os.path.exists(dst_path):
+            os.makedirs(dst_path)
+
+
+def extract_country_name(path_to_zip):
+    """
+    Get country name code from zip file name
+
+    Inputs:
+        - path_to_zip (str): Path to a zip file
+
+    Returns:
+        - country_text (str): The substring from the filename relating to the country name.
+    """
+
+    file_containing_country_name = Path(path_to_zip).stem
+
+    print(f"> Extracting information for {file_containing_country_name}")
+
+    suffix_to_remove = '-latest-free.shp'
+
+    if suffix_to_remove in file_containing_country_name:
+        country_text = file_containing_country_name.replace(suffix_to_remove, '')
+
+    else:
+        country_text = file_containing_country_name
+        warnings.warn("The expected naming convention, 'country-name-latest-free.shp.zip', was not found. "
+                      "This may result in unexpected behaviour.")
+
+    if country_text in countries.keys():
+        return country_text
+    else:
+        raise ValueError("Unable to extract the country name from the filepath. "
+                         f"If the format is correct (e.g., 'country-name-latest-free.shp.zip'), "
+                         f"the location may not have a valid ISO code in our records. "
+                         f"The country detected was {country_text}")
+
+
+def use_regex(input_text):
+    """
+    Check that the input string matches the expected pattern for GeoFabrik shapefiles
+
+    Inputs:
+        - input_text (str):
+    Returns:
+        - bool
+    """
+
+    pattern = re.compile(r"^([A-Za-z0-9]+(_[A-Za-z0-9]+)+)\.[a-zA-Z]+$", re.IGNORECASE)
+    return pattern.match(input_text)
 
 
 if __name__ == "__main__":
@@ -215,11 +262,19 @@ if __name__ == "__main__":
     unzip(zip_filepath, "temp_folder")
     create_folder_structure(output_root)
 
-    extracted_file_list = glob(os.path.join('temp_folder', '*', '*.*'))
+    extracted_file_list = []
+    for root, dirs, files in os.walk(os.path.abspath("temp_folder")):
+        for file in files:
+            if use_regex(file):
+                extracted_file_list.append(os.path.join(root, file))
+            else:
+                print(f"> Found file named '{file}', this file will not be processed.")
 
-    # Get country name code from zip file name and find code from dictionary
-    folder_containing_country_name = Path(zip_filepath).stem
-    country_name = folder_containing_country_name.split('-')[0]
+    print(f'> Found {len(extracted_file_list)} files correctly...processing')
+
+    country_name = extract_country_name(zip_filepath)
+
+    # find code from dictionary
     country_code = (countries[country_name])
     print(" ")
     print("> Processing: " + country_name + " (" + country_code.upper() + ")")
@@ -244,79 +299,80 @@ if __name__ == "__main__":
     bldgname = country_code + "_bldg_bdg_py_s0_osm_pp_buildings"
     landname = country_code + "_land_lnd_py_s0_osm_pp_landuse"
 
-    for file in extracted_file_list:
-        filename, ext = ntpath.splitext(ntpath.basename(file))
+    for filepath in extracted_file_list:
+        filename, ext = ntpath.splitext(ntpath.basename(filepath))
 
         if filename == "gis_osm_places_free_1":
             dst = os.path.join(output_root, "229_stle", settlename + ext)
-            shutil.move(file, dst)
+            shutil.copy(filepath, dst)
 
         elif filename == "gis_osm_places_a_free_1":
             dst = os.path.join(output_root, "229_stle", settlepyname + ext)
-            shutil.move(file, dst)
+            shutil.copy(filepath, dst)
 
         elif filename == "gis_osm_railways_free_1":
             dst = os.path.join(output_root, "232_tran", railname + ext)
-            shutil.move(file, dst)
+            shutil.copy(filepath, dst)
 
         elif filename == "gis_osm_roads_free_1":
             dst = os.path.join(output_root, "232_tran", roadname + ext)
-            shutil.move(file, dst)
+            shutil.copy(filepath, dst)
 
         elif filename == "gis_osm_traffic_free_1":
             dst = os.path.join(output_root, "232_tran", traffptname + ext)
-            shutil.move(file, dst)
+            shutil.copy(filepath, dst)
 
         elif filename == "gis_osm_traffic_a_free_1":
             dst = os.path.join(output_root, "232_tran", traffpyname + ext)
-            shutil.move(file, dst)
+            shutil.copy(filepath, dst)
 
         elif filename == "gis_osm_transport_free_1":
             dst = os.path.join(output_root, "232_tran", transptname + ext)
-            shutil.move(file, dst)
+            shutil.copy(filepath, dst)
 
         elif filename == "gis_osm_transport_a_free_1":
             dst = os.path.join(output_root, "232_tran", transpyname + ext)
-            shutil.move(file, dst)
+            shutil.copy(filepath, dst)
 
         elif filename == "gis_osm_water_a_free_1":
             dst = os.path.join(output_root, "221_phys", waterbodiesname + ext)
-            shutil.move(file, dst)
+            shutil.copy(filepath, dst)
 
         elif filename == "gis_osm_waterways_free_1":
             dst = os.path.join(output_root, "221_phys", waterwaysname + ext)
-            shutil.move(file, dst)
+            shutil.copy(filepath, dst)
 
         elif filename == "gis_osm_natural_free_1":
             dst = os.path.join(output_root, "221_phys", naturalptname + ext)
-            shutil.move(file, dst)
+            shutil.copy(filepath, dst)
 
         elif filename == "gis_osm_natural_a_free_1":
             dst = os.path.join(output_root, "221_phys", naturalpyname + ext)
-            shutil.move(file, dst)
+            shutil.copy(filepath, dst)
 
         elif filename == "gis_osm_pofw_free_1":
             dst = os.path.join(output_root, "222_pois", powptname + ext)
-            shutil.move(file, dst)
+            shutil.copy(filepath, dst)
 
         elif filename == "gis_osm_pofw_a_free_1":
             dst = os.path.join(output_root, "222_pois", powpyname + ext)
-            shutil.move(file, dst)
+            shutil.copy(filepath, dst)
 
         elif filename == "gis_osm_pois_free_1":
             dst = os.path.join(output_root, "222_pois", poisptname + ext)
-            shutil.move(file, dst)
+            shutil.copy(filepath, dst)
 
         elif filename == "gis_osm_pois_a_free_1":
             dst = os.path.join(output_root, "222_pois", poispyname + ext)
-            shutil.move(file, dst)
+            shutil.copy(filepath, dst)
 
         elif filename == "gis_osm_buildings_a_free_1":
             dst = os.path.join(output_root, "206_bldg", bldgname + ext)
-            shutil.move(file, dst)
+            shutil.copy(filepath, dst)
 
         elif filename == "gis_osm_landuse_a_free_1":
             dst = os.path.join(output_root, "218_land", landname + ext)
-            shutil.move(file, dst)
+            shutil.copy(filepath, dst)
 
     shutil.rmtree("temp_folder", ignore_errors=False, onerror=None)
+    print("> Process complete.")
